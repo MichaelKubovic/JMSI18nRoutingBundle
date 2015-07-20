@@ -25,16 +25,16 @@ class DefaultPatternGenerationStrategy implements PatternGenerationStrategyInter
     private $translationDomain;
     private $locales;
     private $cacheDir;
-    private $defaultLocale;
+    private $hosts;
 
-    public function __construct($strategy, TranslatorInterface $translator, array $locales, $cacheDir, $translationDomain = 'routes', $defaultLocale = 'en')
+    public function __construct($strategy, TranslatorInterface $translator, array $locales, $cacheDir, $translationDomain = 'routes', array $hosts)
     {
         $this->strategy = $strategy;
         $this->translator = $translator;
         $this->translationDomain = $translationDomain;
         $this->locales = $locales;
         $this->cacheDir = $cacheDir;
-        $this->defaultLocale = $defaultLocale;
+        $this->hosts = $hosts;
     }
 
     /**
@@ -43,36 +43,40 @@ class DefaultPatternGenerationStrategy implements PatternGenerationStrategyInter
     public function generateI18nPatterns($routeName, Route $route)
     {
         $patterns = array();
-        foreach ($route->getOption('i18n_locales') ?: $this->locales as $locale) {
-            // Check if translation exists in the translation catalogue to avoid errors being logged by 
-            // the new LoggingTranslator of Symfony 2.6. However, the LoggingTranslator did not implement
-            // the interface until Symfony 2.6.5, so an extra check is needed.
-            if ($this->translator instanceof TranslatorBagInterface || $this->translator instanceof LoggingTranslator) {
-                // Check if route is translated.
-                if (!$this->translator->getCatalogue($locale)->has($routeName, $this->translationDomain)) {
-                    // No translation found.
-                    $i18nPattern = $route->getPattern();
+        // Generate routes for every host
+        foreach ($this->hosts as $hostLocale => $host) {
+            foreach ($route->getOption('i18n_locales') ?: $this->locales as $locale) {
+                // Check if translation exists in the translation catalogue to avoid errors being logged by 
+                // the new LoggingTranslator of Symfony 2.6. However, the LoggingTranslator did not implement
+                // the interface until Symfony 2.6.5, so an extra check is needed.
+                if ($this->translator instanceof TranslatorBagInterface || $this->translator instanceof LoggingTranslator) {
+                    // Check if route is translated.
+                    if (!$this->translator->getCatalogue($locale)->has($routeName, $this->translationDomain)) {
+                        // No translation found.
+                        $i18nPattern = $route->getPattern();
+                    } else {
+                        // Get translation.
+                        $i18nPattern = $this->translator->trans($routeName, array(), $this->translationDomain, $locale);
+                    }
                 } else {
-                    // Get translation.
-                    $i18nPattern = $this->translator->trans($routeName, array(), $this->translationDomain, $locale);
+                    // if no translation exists, we use the current pattern
+                    if ($routeName === $i18nPattern = $this->translator->trans($routeName, array(), $this->translationDomain, $locale)) {
+                        $i18nPattern = $route->getPattern();
+                    }
                 }
-            } else {
-                // if no translation exists, we use the current pattern
-                if ($routeName === $i18nPattern = $this->translator->trans($routeName, array(), $this->translationDomain, $locale)) {
-                    $i18nPattern = $route->getPattern();
-                }
-            }
 
-            // prefix with locale if requested
-            if (self::STRATEGY_PREFIX === $this->strategy
-                || (self::STRATEGY_PREFIX_EXCEPT_DEFAULT === $this->strategy && $this->defaultLocale !== $locale)) {
-                $i18nPattern = '/'.$locale.$i18nPattern;
-                if (null !== $route->getOption('i18n_prefix')) {
-                    $i18nPattern = $route->getOption('i18n_prefix').$i18nPattern;
+                // prefix with locale if requested
+                if (self::STRATEGY_PREFIX === $this->strategy
+                    // prefix only if locale isn't hosts's default locale
+                    || (self::STRATEGY_PREFIX_EXCEPT_DEFAULT === $this->strategy && $hostLocale !== $locale)) {
+                    $i18nPattern = '/'.$locale.$i18nPattern;
+                    if (null !== $route->getOption('i18n_prefix')) {
+                        $i18nPattern = $route->getOption('i18n_prefix').$i18nPattern;
+                    }
                 }
-            }
 
-            $patterns[$i18nPattern][] = $locale;
+                $patterns[$i18nPattern][$host][] = $locale;
+            }
         }
 
         return $patterns;

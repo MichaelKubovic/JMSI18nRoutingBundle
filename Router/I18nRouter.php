@@ -122,15 +122,16 @@ class I18nRouter extends Router
         }
 
         $generator = $this->getGenerator();
+        $currentHost = $this->context->getHost();
 
         // if an absolute URL is requested, we set the correct host
         if ($absolute && $this->hostMap) {
-            $currentHost = $this->context->getHost();
             $this->context->setHost($this->hostMap[$locale]);
         }
 
         try {
-            $url = $generator->generate($locale.I18nLoader::ROUTING_PREFIX.$name, $parameters, $absolute);
+            // look for route name prefixed with host
+            $url = $generator->generate(str_replace('.', '_', $currentHost).'_'.$locale.I18nLoader::ROUTING_PREFIX.$name, $parameters, $absolute);
 
             if ($absolute && $this->hostMap) {
                 $this->context->setHost($currentHost);
@@ -250,8 +251,9 @@ class I18nRouter extends Router
             $params['_route'] = substr($params['_route'], $pos + strlen(I18nLoader::ROUTING_PREFIX));
         }
 
-        // check if the matched route belongs to a different locale on another host
-        if (isset($params['_locale'])
+        // DO NOT check if the matched route belongs to a different locale on another host
+        // this behaviour is desired!
+        /*if (isset($params['_locale'])
                 && isset($this->hostMap[$params['_locale']])
                 && $this->context->getHost() !== $host = $this->hostMap[$params['_locale']]) {
             if (!$this->redirectToHost) {
@@ -269,7 +271,7 @@ class I18nRouter extends Router
                 'httpsPort'   => $this->context->getHttpsPort(),
                 '_route'      => $params['_route'],
             );
-        }
+        }*/
 
         // if we have no locale set on the route, we try to set one according to the localeResolver
         // if we don't do this all _internal routes will have the default locale on first request

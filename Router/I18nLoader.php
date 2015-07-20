@@ -56,21 +56,27 @@ class I18nLoader
                 continue;
             }
 
-            foreach ($this->patternGenerationStrategy->generateI18nPatterns($name, $route) as $pattern => $locales) {
-                // If this pattern is used for more than one locale, we need to keep the original route.
-                // We still add individual routes for each locale afterwards for faster generation.
-                if (count($locales) > 1) {
-                    $catchMultipleRoute = clone $route;
-                    $catchMultipleRoute->setPattern($pattern);
-                    $catchMultipleRoute->setDefault('_locales', $locales);
-                    $i18nCollection->add(implode('_', $locales).I18nLoader::ROUTING_PREFIX.$name, $catchMultipleRoute);
-                }
+            foreach ($this->patternGenerationStrategy->generateI18nPatterns($name, $route) as $pattern => $hosts) {
+                // Every expanded route will have host matched by sf router
+                foreach ($hosts as $host => $locales) {
+                    // If this pattern is used for more than one locale, we need to keep the original route.
+                    // We still add individual routes for each locale afterwards for faster generation.
+                    if (count($locales) > 1) {
+                        $catchMultipleRoute = clone $route;
+                        $catchMultipleRoute->setPattern($pattern);
+                        $catchMultipleRoute->setHost($host);
+                        $catchMultipleRoute->setDefault('_locales', $locales);
+                        // Hostname in route is just for readibility, matching is done by setHost() above
+                        $i18nCollection->add(str_replace('.', '_', $host).'_'.implode('_', $locales).I18nLoader::ROUTING_PREFIX.$name, $catchMultipleRoute);
+                    }
 
-                foreach ($locales as $locale) {
-                    $localeRoute = clone $route;
-                    $localeRoute->setPattern($pattern);
-                    $localeRoute->setDefault('_locale', $locale);
-                    $i18nCollection->add($locale.I18nLoader::ROUTING_PREFIX.$name, $localeRoute);
+                    foreach ($locales as $locale) {
+                        $localeRoute = clone $route;
+                        $localeRoute->setPattern($pattern);
+                        $localeRoute->setHost($host);
+                        $localeRoute->setDefault('_locale', $locale);
+                        $i18nCollection->add(str_replace('.', '_', $host).'_'.$locale.I18nLoader::ROUTING_PREFIX.$name, $localeRoute);
+                    }
                 }
             }
         }
